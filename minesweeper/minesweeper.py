@@ -105,27 +105,34 @@ class Sentence():
         """
         Returns the set of all cells in self.cells known to be mines.
         """
-        raise NotImplementedError
+        if(len(self.cells) == self.count): 
+            return self.cells
+        return None
 
     def known_safes(self):
         """
         Returns the set of all cells in self.cells known to be safe.
         """
-        raise NotImplementedError
+        if(len(self.cells) == 0): 
+            return self.cells
+        return None
 
     def mark_mine(self, cell):
         """
         Updates internal knowledge representation given the fact that
         a cell is known to be a mine.
         """
-        raise NotImplementedError
+        if (cell in self.cells):
+            self.cells.remove(cell)
+            self.count -= 1
 
     def mark_safe(self, cell):
         """
         Updates internal knowledge representation given the fact that
         a cell is known to be safe.
         """
-        raise NotImplementedError
+        if (cell in self.cells):
+            self.cells.remove(cell)
 
 
 class MinesweeperAI():
@@ -156,7 +163,7 @@ class MinesweeperAI():
         """
         self.mines.add(cell)
         for sentence in self.knowledge:
-            sentence.mark_mine(cell)
+            sentence.mark_mine(cell) 
 
     def mark_safe(self, cell):
         """
@@ -165,9 +172,9 @@ class MinesweeperAI():
         """
         self.safes.add(cell)
         for sentence in self.knowledge:
-            sentence.mark_safe(cell)
+            sentence.mark_safe(cell) #Corregir aca 
 
-    def add_knowledge(self, cell, count):
+    def add_knowledge(self, cell, count): 
         """
         Called when the Minesweeper board tells us, for a given
         safe cell, how many neighboring cells have mines in them.
@@ -182,7 +189,81 @@ class MinesweeperAI():
             5) add any new sentences to the AI's knowledge base
                if they can be inferred from existing knowledge
         """
-        raise NotImplementedError
+
+        #mark the cell as a move that has been made
+        self.moves_made.add(cell)
+
+        #mark the cell as safe
+        self.mark_safe(cell)
+
+        #create a list with neighbours of the cell
+        neighbours = []
+
+        if (cell[0] == 0 and cell[1] == 0): 
+            neighbours.extend([(0,1), (1,0), (1,1)])
+        elif(cell[0] == 0 and cell[1] == self.width - 1):
+            neighbours.extend([(0,6),(1,6),(1,7)]) 
+        elif(cell[0] == self.height - 1 and cell[1] == 0):
+            neighbours.extend([(6,0),(6,1),(7,1)])
+        elif(cell[0] == self.height - 1 and cell[1] == self.width - 1):
+            neighbours.extend([(6,6),(6,7),(7,6)])
+        elif(cell[0] >= 1 and cell[0] <= self.height - 2 and cell[1] == 0):
+            neighbours.extend([(cell[0]-1,0),(cell[0]-1,1),
+                                             (cell[0],1),
+                               (cell[0]+1,0),(cell[0]+1,1)])
+        elif(cell[0] >= 1 and cell[0] <= self.height - 2 and cell[1] == self.width - 1):
+            neighbours.extend([(cell[0]-1,6),(cell[0]-1,7),
+                               (cell[0],6),
+                               (cell[0]+1,6),(cell[0]+1,7)])
+        elif(cell[0] == 0 and cell[1] >= 1 and cell[1] <= self.width - 2):
+            neighbours.extend([(0,cell[1]-1),            (0,cell[1]+1),
+                               (1,cell[1]-1),(1,cell[1]),(1,cell[1]+1)])
+        elif(cell[0] == self.height - 1 and cell[1] >= 1 and cell[1] <= self.width - 2):
+            neighbours.extend([(6,cell[1]-1),(6,cell[1]),(6,cell[1]+1),
+                               (7,cell[1]-1),            (7,cell[1]+1)])
+        else:
+            neighbours.extend([(cell[0]-1,cell[1]-1),(cell[0]-1,cell[1]),(cell[0]-1,cell[1]+1), 
+                               (cell[0], cell[1]-1),                     (cell[0],cell[1]+1),
+                               (cell[0]+1,cell[1]-1),(cell[0]+1,cell[1]),(cell[0]+1,cell[1]+1)])
+            
+
+        #add a new sentence to the AI's knowledge base
+        sentence = Sentence(neighbours,count)
+
+        #Be sure to only include cells whose state is still undetermined in the sentence.
+        for c in sentence.cells:
+            if (cell in self.mines):
+                self.mark_mine(c)
+            elif(cell in self.safes):
+                self.mark_safe(c)
+
+        #add the sentence to the knowledge
+        self.knowledge.append(sentence)
+        
+        #Check subsets. 
+        sets = []
+        for s in self.knowledge: 
+            new = Sentence(s.cells - sentence.cells, s.count - sentence.count)
+            sets.append(new)
+        
+        self.knowledge.extend(sets)
+
+        #If, based on any of the sentences in self.knowledge, new cells can be marked as safe or as mines, then the function should do so.
+        mines = []
+        safes = []
+        for sentence in self.knowledge: 
+            if (sentence.known_mines() != None):
+                mines.extend(sentence.known_mines())
+            if (sentence.known_safes() != None):
+                safes.extend(sentence.known_safes())
+        
+        if (mines != []):
+            for m in mines:
+                self.mark_mine(m)
+        if (safes != []):
+            for s in safes:
+                self.mark_safe(s)   
+
 
     def make_safe_move(self):
         """
@@ -193,13 +274,37 @@ class MinesweeperAI():
         This function may use the knowledge in self.mines, self.safes
         and self.moves_made, but should not modify any of those values.
         """
-        raise NotImplementedError
+ 
+        for i in range(self.height):
+            for j in range(self.width): 
+                cell = (i,j)
+                if(cell not in self.moves_made and 
+                   cell in self.safes): 
+                    return (i,j)
+        
+        return None 
 
-    def make_random_move(self):
+
+
+    def make_random_move(self): 
         """
         Returns a move to make on the Minesweeper board.
         Should choose randomly among cells that:
             1) have not already been chosen, and
             2) are not known to be mines
         """
-        raise NotImplementedError
+        cells = {(i, j) for i in range(self.height) for j in range(self.width)}
+        
+        cells -= self.moves_made
+        cells -= self.mines 
+
+        cells_list = list(cells)
+
+        move = random.choice(cells_list)
+        
+        return move
+
+
+
+#All changes required in Sentence are done- 
+#make_safe_move and make_random_move is done 
